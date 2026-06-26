@@ -404,19 +404,74 @@ export const renderInventoryModal = () => {
     
     const isCombat = gameState.meta.currentView === 'view-combat';
     
-    allDeckCards.forEach((cardRef) => {
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        if (!isCombat) e.currentTarget.classList.add('drag-over');
+    };
+    const handleDragLeave = (e) => {
+        e.currentTarget.classList.remove('drag-over');
+    };
+    
+    deckContainer.ondragover = handleDragOver;
+    deckContainer.ondragleave = handleDragLeave;
+    deckContainer.ondrop = (e) => {
+        e.preventDefault();
+        deckContainer.classList.remove('drag-over');
+        if (isCombat) return;
+        
+        const sourceZone = e.dataTransfer.getData('source-zone');
+        if (sourceZone === 'main') return;
+        
+        if (allDeckCards.length >= 10) {
+            showDialog('Notice', 'Deck is full (Max 10)!', false);
+            return;
+        }
+        
+        const cardIdx = e.dataTransfer.getData('card-idx');
+        const cardRef = gameState.player.inventory.cards[cardIdx];
+        gameState.player.inventory.cards.splice(cardIdx, 1);
+        gameState.deck.drawPile.push(cardRef);
+        renderInventoryModal();
+    };
+
+    sideboardContainer.ondragover = handleDragOver;
+    sideboardContainer.ondragleave = handleDragLeave;
+    sideboardContainer.ondrop = (e) => {
+        e.preventDefault();
+        sideboardContainer.classList.remove('drag-over');
+        if (isCombat) return;
+        
+        const sourceZone = e.dataTransfer.getData('source-zone');
+        if (sourceZone === 'inventory') return;
+        
+        const cardRef = e.dataTransfer.getData('card-ref');
+        trashCard(cardRef, 'deck');
+        gameState.player.inventory.cards.push(cardRef);
+        renderInventoryModal();
+    };
+    
+    allDeckCards.forEach((cardRef, idx) => {
         const parsed = parseCard(cardRef);
         const displayStr = cardRef.includes(':') ? `${parsed.name} (${parsed.element})` : parsed.name;
         
         const el = document.createElement('div');
         el.className = 'modal-card';
         el.textContent = displayStr;
+        
+        el.draggable = !isCombat;
+        el.ondragstart = (e) => {
+            el.classList.add('dragging');
+            e.dataTransfer.setData('source-zone', 'main');
+            e.dataTransfer.setData('card-ref', cardRef);
+        };
+        el.ondragend = () => el.classList.remove('dragging');
+        
         el.addEventListener('click', () => {
             if (isCombat) {
                 showDialog('Notice', "Cannot trash cards during combat!", false);
                 return;
             }
-            showDialog('Confirm', `Trash ${displayStr} from your main deck?`, true, () => {
+            showDialog('Confirm', '"Trash" usually means permanently destroy. Are you sure? You can just drag it to sideboard!', true, () => {
                 trashCard(cardRef, 'deck');
             });
         });
@@ -432,8 +487,18 @@ export const renderInventoryModal = () => {
         const el = document.createElement('div');
         el.className = 'modal-card';
         el.textContent = displayStr;
+        
+        el.draggable = !isCombat;
+        el.ondragstart = (e) => {
+            el.classList.add('dragging');
+            e.dataTransfer.setData('source-zone', 'inventory');
+            e.dataTransfer.setData('card-idx', idx);
+            e.dataTransfer.setData('card-ref', cardRef);
+        };
+        el.ondragend = () => el.classList.remove('dragging');
+        
         el.addEventListener('click', () => {
-            showDialog('Confirm', `Trash ${displayStr} from your sideboard?`, true, () => {
+            showDialog('Confirm', 'Trash permanently?', true, () => {
                 trashCard(cardRef, 'sideboard', idx);
             });
         });
@@ -490,3 +555,4 @@ export const useItem = (itemName, idx) => {
         });
     }
 };
+

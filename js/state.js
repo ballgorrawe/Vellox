@@ -34,7 +34,7 @@ export const INITIAL_STATE = {
     },
     meta: {
         bossTokens: 0,
-        currentView: 'view-class-selection'
+        currentView: 'view-main-menu'
     },
     modifiers: {
         nextRoll: null

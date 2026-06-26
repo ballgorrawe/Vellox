@@ -31,7 +31,9 @@ export const initDOM = () => {
         playerClass: document.getElementById('ui-class'),
         hp: document.getElementById('ui-hp'),
         gold: document.getElementById('ui-gold'),
+        mainMenuBtn: document.getElementById('btn-main-menu-start'),
         startRunBtn: document.getElementById('btn-start-run'),
+        startRunContainer: document.getElementById('start-run-container'),
         classInfo: document.getElementById('ui-class'),
         hpInfo: document.getElementById('ui-hp'),
         goldInfo: document.getElementById('ui-gold')
@@ -50,7 +52,6 @@ export const initDOM = () => {
         enemyIcon: document.getElementById('enemy-icon'),
         enemyHp: document.getElementById('enemy-hp'),
         enemyBlock: document.getElementById('enemy-block'),
-        playerHp: document.getElementById('player-hp'),
         playerBlock: document.getElementById('player-block'),
         playerEnergy: document.getElementById('player-energy'),
         handArea: document.getElementById('combat-hand-area'),
@@ -131,6 +132,14 @@ export const syncUI = () => {
         });
     }
 
+    const topBar = document.getElementById('ui-bar');
+    
+    if (gameState.meta.currentView === 'view-class-selection' || gameState.meta.currentView === 'view-main-menu') {
+        if (topBar) topBar.style.display = 'none';
+    } else {
+        if (topBar) topBar.style.display = 'flex';
+    }
+
     // Update Top Bar
     if (DOM.ui.classInfo) DOM.ui.classInfo.textContent = gameState.player.class || '-';
     if (DOM.ui.hpInfo) DOM.ui.hpInfo.textContent = `${gameState.player.stats.hp} / ${gameState.player.stats.maxHp}`;
@@ -201,17 +210,17 @@ export const showPrompt = (title, message, onConfirmCallback) => {
 
 const getTileGridPosition = (index) => {
     if (index >= 0 && index <= 11) {
-        // Bottom Row
-        return { c: index + 1, r: 12 };
-    } else if (index >= 12 && index <= 21) {
-        // Right Col
-        return { c: 12, r: 12 - (index - 11) };
-    } else if (index >= 22 && index <= 33) {
-        // Top Row
-        return { c: 12 - (index - 22), r: 1 };
+        // Left Edge (Moving Up)
+        return { c: 1, r: 12 - index };
+    } else if (index >= 12 && index <= 22) {
+        // Top Edge (Moving Right)
+        return { c: 1 + (index - 11), r: 1 };
+    } else if (index >= 23 && index <= 33) {
+        // Right Edge (Moving Down)
+        return { c: 12, r: 1 + (index - 22) };
     } else if (index >= 34 && index <= 43) {
-        // Left Col
-        return { c: 1, r: 1 + (index - 33) };
+        // Bottom Edge (Moving Left)
+        return { c: 12 - (index - 33), r: 12 };
     }
     return { c: 1, r: 1 };
 };
@@ -300,7 +309,6 @@ export const renderCombatUI = () => {
     DOM.combat.enemyHp.textContent = `HP: ${combat.enemy.hp} / ${combat.enemy.maxHp}`;
     DOM.combat.enemyBlock.textContent = `Block: ${combat.enemy.block}`;
     
-    DOM.combat.playerHp.textContent = `HP: ${player.stats.hp} / ${player.stats.maxHp}`;
     DOM.combat.playerBlock.textContent = `Block: ${combat.playerBlock}`;
     DOM.combat.playerEnergy.textContent = `Energy: ${player.stats.energy} / ${player.stats.maxEnergy}`;
     
@@ -313,6 +321,7 @@ export const renderCombatUI = () => {
             skillBtn.id = 'btn-hero-skill';
             skillBtn.className = 'btn';
             skillBtn.style.marginLeft = '20px';
+            skillBtn.style.padding = '8px 16px';
             if (handlers.useHeroSkill) skillBtn.addEventListener('click', handlers.useHeroSkill);
             playerArea.appendChild(skillBtn);
         }
@@ -329,6 +338,12 @@ export const renderCombatUI = () => {
         } else if (player.class === 'Priest') {
             skillBtn.textContent = 'Divine Heal (2 EN)';
             skillBtn.title = 'Restore 5 HP.';
+        } else if (player.class === 'Rogue') {
+            skillBtn.textContent = 'Shadow Step (1 EN)';
+            skillBtn.title = 'Gain 5 Block and draw 1 card.';
+        } else if (player.class === 'Paladin') {
+            skillBtn.textContent = 'Divine Favor (2 EN)';
+            skillBtn.title = 'Heal 3 HP and gain 5 Block.';
         }
         
         skillBtn.disabled = combat.skillUsedThisTurn || combat.turn !== 'player';
@@ -371,4 +386,7 @@ export const renderCombatUI = () => {
     if (DOM.combat.executeQueueBtn) {
         DOM.combat.executeQueueBtn.disabled = combat.isExecuting || combat.turn !== 'player';
     }
+    
+    // Ensure the top bar is updated whenever combat UI renders
+    syncUI();
 };

@@ -66,24 +66,30 @@ const bindEvents = () => {
                 
                 pendingClass = button.dataset.class;
                 
-                // Show the start run button
-                if (DOM.ui.startRunBtn) {
-                    DOM.ui.startRunBtn.classList.remove('hidden');
-                    // Add slight fade-in by ensuring opacity is set (handled in CSS usually, but we ensure it's visible)
-                    DOM.ui.startRunBtn.style.opacity = '1';
-                    DOM.ui.startRunBtn.style.transform = 'scale(1)';
+                // Show the start run container
+                if (DOM.ui.startRunContainer) {
+                    DOM.ui.startRunContainer.classList.remove('hidden');
+                    DOM.ui.startRunContainer.style.animation = 'fadeIn 0.5s ease-out';
                 }
             }
         });
     });
+
+    if (DOM.ui.mainMenuBtn) {
+        DOM.ui.mainMenuBtn.addEventListener('click', () => {
+            gameState.meta.currentView = 'view-class-selection';
+            syncUI();
+        });
+    }
 
     if (DOM.ui.startRunBtn) {
         DOM.ui.startRunBtn.addEventListener('click', () => {
             if (pendingClass) {
                 initializeGame(pendingClass);
                 // Hide it again for future resets
-                DOM.ui.startRunBtn.classList.add('hidden');
-                DOM.ui.startRunBtn.style.opacity = '0';
+                if (DOM.ui.startRunContainer) {
+                    DOM.ui.startRunContainer.classList.add('hidden');
+                }
             }
         });
     }
@@ -114,7 +120,9 @@ const bindEvents = () => {
 };
 
 const bootGame = () => {
+    resetGameState();
     initDOM();
+    syncUI();
     bindEvents();
 };
 

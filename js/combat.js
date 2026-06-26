@@ -1,5 +1,5 @@
 import { gameState } from './state.js';
-import { ELEMENT_ICONS } from './data.js';
+import { ELEMENT_ICONS, ENEMY_CARD_DB } from './data.js';
 import { DOM, renderCombatUI, syncUI, renderBoard, parseCard, showDialog } from './ui.js';
 
 let handlers = {
@@ -22,6 +22,10 @@ export const initCombat = (encounterType) => {
     gameState.combat.enemy.maxHp = baseHp + (gameState.lapCount * 10);
     gameState.combat.enemy.hp = gameState.combat.enemy.maxHp;
     gameState.combat.enemy.block = 0;
+    
+    const normalCards = ["Bite", "Tackle", "Harden"];
+    const bossCards = ["Inferno Breath", "Earthquake", "Devour"];
+    gameState.combat.enemy.movePool = isBoss ? [...normalCards, ...bossCards] : [...normalCards];
     
     gameState.combat.enemy.element = ELEMENT_ICONS[Math.floor(Math.random() * ELEMENT_ICONS.length)];
     
@@ -70,19 +74,39 @@ export const startEnemyTurn = () => {
     setTimeout(() => {
         if (gameState.combat.enemy.hp <= 0) return;
         
-        let dmg = 5 + gameState.lapCount;
+        const isBoss = gameState.combat.enemy.type === 'Boss' || gameState.combat.enemy.type === '👹';
+        const numPlays = isBoss ? 2 : 1;
         
-        if (gameState.combat.playerBlock > 0) {
-            if (dmg >= gameState.combat.playerBlock) {
-                dmg -= gameState.combat.playerBlock;
-                gameState.combat.playerBlock = 0;
-            } else {
-                gameState.combat.playerBlock -= dmg;
-                dmg = 0;
+        for (let i = 0; i < numPlays; i++) {
+            const pool = gameState.combat.enemy.movePool;
+            const cardName = pool[Math.floor(Math.random() * pool.length)];
+            const card = ENEMY_CARD_DB[cardName];
+            
+            showDialog("Enemy Turn", `Enemy played: ${cardName}!\n${card.description}`);
+            
+            if (card.value) {
+                let dmg = card.value;
+                if (gameState.combat.playerBlock > 0) {
+                    if (dmg >= gameState.combat.playerBlock) {
+                        dmg -= gameState.combat.playerBlock;
+                        gameState.combat.playerBlock = 0;
+                    } else {
+                        gameState.combat.playerBlock -= dmg;
+                        dmg = 0;
+                    }
+                }
+                gameState.player.stats.hp -= dmg;
+            }
+            
+            if (card.block) {
+                gameState.combat.enemy.block += card.block;
+            }
+            
+            if (card.heal) {
+                gameState.combat.enemy.hp = Math.min(gameState.combat.enemy.maxHp, gameState.combat.enemy.hp + card.heal);
             }
         }
         
-        gameState.player.stats.hp -= dmg;
         renderCombatUI();
         
         if (!checkCombatEnd()) {
@@ -274,11 +298,15 @@ export const useHeroSkill = () => {
     if (playerClass === 'Mage' && gameState.player.stats.hp <= 3) { showDialog('Notice', "Not enough HP!", false); return; }
     if (playerClass === 'Archer' && gameState.player.stats.energy < 1) { showDialog('Notice', "Not enough energy!", false); return; }
     if (playerClass === 'Priest' && gameState.player.stats.energy < 2) { showDialog('Notice', "Not enough energy!", false); return; }
+    if (playerClass === 'Rogue' && gameState.player.stats.energy < 1) { showDialog('Notice', "Not enough energy!", false); return; }
+    if (playerClass === 'Paladin' && gameState.player.stats.energy < 2) { showDialog('Notice', "Not enough energy!", false); return; }
     
     if (playerClass === 'Warrior') gameState.player.stats.energy -= 2;
     if (playerClass === 'Mage') gameState.player.stats.hp -= 3;
     if (playerClass === 'Archer') gameState.player.stats.energy -= 1;
     if (playerClass === 'Priest') gameState.player.stats.energy -= 2;
+    if (playerClass === 'Rogue') gameState.player.stats.energy -= 1;
+    if (playerClass === 'Paladin') gameState.player.stats.energy -= 2;
     
     gameState.combat.skillUsedThisTurn = true;
     
@@ -317,6 +345,12 @@ export const useHeroSkill = () => {
         gameState.combat.enemyMarked = true;
     } else if (playerClass === 'Priest') {
         gameState.player.stats.hp = Math.min(gameState.player.stats.hp + 5, gameState.player.stats.maxHp);
+    } else if (playerClass === 'Rogue') {
+        gameState.combat.playerBlock += 5;
+        drawCards(1);
+    } else if (playerClass === 'Paladin') {
+        gameState.player.stats.hp = Math.min(gameState.player.stats.hp + 3, gameState.player.stats.maxHp);
+        gameState.combat.playerBlock += 5;
     }
     
     renderCombatUI();
