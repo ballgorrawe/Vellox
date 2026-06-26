@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Endless Roguelike RPG</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main id="game-container">
+        <!-- View 1: Class Selection -->
+        <div id="view-class-selection" class="view">
+            <h1>Select Your Class</h1>
+            <div class="class-grid">
+                <div class="class-card" onclick="initGame('Warrior')">
+                    <h2>Warrior</h2>
+                    <p>Base HP: 80</p>
+                </div>
+                <div class="class-card" onclick="initGame('Priest')">
+                    <h2>Priest</h2>
+                    <p>Base HP: 60</p>
+                </div>
+                <div class="class-card" onclick="initGame('Archer')">
+                    <h2>Archer</h2>
+                    <p>Base HP: 50</p>
+                </div>
+                <div class="class-card" onclick="initGame('Mage')">
+                    <h2>Mage</h2>
+                    <p>Base HP: 40</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- View 2: Endless Board -->
+        <div id="view-board" class="view hidden">
+            <div id="ui-bar">
+                <span id="ui-class">Class: </span> | 
+                <span id="ui-hp">HP: </span> | 
+                <span id="ui-gold">Gold: </span>
+            </div>
+            <h2>Endless Board</h2>
+            <!-- Placeholder for board content -->
+        </div>
+
+        <!-- View 3: Combat -->
+        <div id="view-combat" class="view hidden">
+            <h2>Combat</h2>
+            <!-- Placeholder for combat content -->
+        </div>
+    </main>
+    <script src="game.js"></script>
+</body>
+</html>
