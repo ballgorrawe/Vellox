@@ -4,50 +4,246 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Endless Roguelike RPG</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <main id="game-container">
         <!-- View 1: Class Selection -->
-        <div id="view-class-selection" class="view">
-            <h1>Select Your Class</h1>
-            <div class="class-grid">
-                <div class="class-card" onclick="initGame('Warrior')">
+        <section id="view-class-selection" class="view" aria-hidden="false" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80vh;">
+            <header style="text-align: center; margin-bottom: 40px;">
+                <h1 style="font-size: 3rem; text-shadow: 0 0 15px rgba(255,255,255,0.3); margin-bottom: 10px;">Select Your Class</h1>
+                <div class="subtitle-container" style="background: rgba(0,0,0,0.6); padding: 10px 20px; border-radius: 5px; border: 1px solid #4b5563;">
+                    <p class="subtitle" style="margin: 0; font-size: 1.2rem; color: #d1d5db;">Choose your destiny to begin the endless run.</p>
+                </div>
+            </header>
+            <div class="class-grid" id="class-grid" style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px;">
+                <button class="class-card theme-warrior" data-class="Warrior">
+                    <div class="class-icon">🛡️</div>
                     <h2>Warrior</h2>
-                    <p>Base HP: 80</p>
-                </div>
-                <div class="class-card" onclick="initGame('Priest')">
+                    <div class="class-stats">
+                        <div class="stat-row"><span>HP</span> <div class="hp-bar-bg"><div class="hp-bar-fill" style="width: 100%;"></div></div> <span>80</span></div>
+                        <div class="stat-row"><span>Difficulty</span> <span class="stars">⭐</span></div>
+                    </div>
+                </button>
+                <button class="class-card theme-priest" data-class="Priest">
+                    <div class="class-icon">☀️</div>
                     <h2>Priest</h2>
-                    <p>Base HP: 60</p>
-                </div>
-                <div class="class-card" onclick="initGame('Archer')">
+                    <div class="class-stats">
+                        <div class="stat-row"><span>HP</span> <div class="hp-bar-bg"><div class="hp-bar-fill" style="width: 75%;"></div></div> <span>60</span></div>
+                        <div class="stat-row"><span>Difficulty</span> <span class="stars">⭐⭐</span></div>
+                    </div>
+                </button>
+                <button class="class-card theme-archer" data-class="Archer">
+                    <div class="class-icon">🏹</div>
                     <h2>Archer</h2>
-                    <p>Base HP: 50</p>
-                </div>
-                <div class="class-card" onclick="initGame('Mage')">
+                    <div class="class-stats">
+                        <div class="stat-row"><span>HP</span> <div class="hp-bar-bg"><div class="hp-bar-fill" style="width: 62.5%;"></div></div> <span>50</span></div>
+                        <div class="stat-row"><span>Difficulty</span> <span class="stars">⭐⭐⭐</span></div>
+                    </div>
+                </button>
+                <button class="class-card theme-mage" data-class="Mage">
+                    <div class="class-icon">🪄</div>
                     <h2>Mage</h2>
-                    <p>Base HP: 40</p>
-                </div>
+                    <div class="class-stats">
+                        <div class="stat-row"><span>HP</span> <div class="hp-bar-bg"><div class="hp-bar-fill" style="width: 50%;"></div></div> <span>40</span></div>
+                        <div class="stat-row"><span>Difficulty</span> <span class="stars">⭐⭐⭐⭐</span></div>
+                    </div>
+                </button>
             </div>
-        </div>
+            <button id="btn-start-run" class="btn hidden" style="font-size: 1.5rem; padding: 15px 40px; background: linear-gradient(135deg, #1e3a8a, #3b82f6); box-shadow: 0 0 20px rgba(59, 130, 246, 0.5); border-radius: 50px; text-transform: uppercase; font-weight: 800; letter-spacing: 2px; transition: opacity 0.5s ease, transform 0.3s ease;">ENTER THE ENDLESS BOARD</button>
+        </section>
 
         <!-- View 2: Endless Board -->
-        <div id="view-board" class="view hidden">
-            <div id="ui-bar">
-                <span id="ui-class">Class: </span> | 
-                <span id="ui-hp">HP: </span> | 
-                <span id="ui-gold">Gold: </span>
+        <section id="view-board" class="view hidden" aria-hidden="true">
+            <header id="ui-bar" class="ui-bar">
+                <div class="ui-stat">
+                    <span class="label">Class</span>
+                    <span id="ui-class" class="value">-</span>
+                </div>
+                <div class="ui-stat">
+                    <span class="label">HP</span>
+                    <span id="ui-hp" class="value">- / -</span>
+                </div>
+                <div class="ui-stat">
+                    <span class="label">Gold</span>
+                    <span id="ui-gold" class="value">0</span>
+                </div>
+            </header>
+            <div class="board-content">
+                <h2>Endless Board</h2>
+                <div id="status-log">Ready to roll!</div>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button id="btn-roll-dice" class="btn">Roll Dice</button>
+                    <button id="btn-inventory" class="btn" style="background-color: #4b5563;">Inventory & Deck</button>
+                </div>
+                <div id="isometric-wrapper">
+                    <div id="board-container"></div>
+                    <div id="center-boss-area">😈</div>
+                </div>
             </div>
-            <h2>Endless Board</h2>
-            <!-- Placeholder for board content -->
-        </div>
+            <button id="btn-return-to-shop" class="btn hidden" style="position: absolute; bottom: 20px; right: 20px; z-index: 100; background-color: #3b82f6; box-shadow: 0 4px 6px rgba(0,0,0,0.5);">🔙 Return to Shop</button>
+            <div id="dice-overlay" class="hidden">
+                <div id="dice-cube">
+                    <div class="dice-face face-1">1</div>
+                    <div class="dice-face face-2">2</div>
+                    <div class="dice-face face-3">3</div>
+                    <div class="dice-face face-4">4</div>
+                    <div class="dice-face face-5">5</div>
+                    <div class="dice-face face-6">6</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- View X: Event -->
+        <section id="view-event" class="view hidden" aria-hidden="true">
+            <header class="ui-bar">
+                <h2>Mystery Event</h2>
+            </header>
+            <div class="event-content" style="padding: 20px; text-align: center;">
+                <h2 id="event-title" style="margin-bottom: 15px; color: #fbbf24;">Event Title</h2>
+                <p id="event-description" style="margin-bottom: 30px; font-size: 1.2rem; line-height: 1.5;">Event Description</p>
+                <div id="event-choices" style="display: flex; flex-direction: column; gap: 15px; max-width: 500px; margin: 0 auto;">
+                    <!-- Dynamically filled -->
+                </div>
+            </div>
+        </section>
 
         <!-- View 3: Combat -->
-        <div id="view-combat" class="view hidden">
-            <h2>Combat</h2>
-            <!-- Placeholder for combat content -->
+        <section id="view-combat" class="view hidden" aria-hidden="true">
+            <header class="ui-bar">
+                <h2>Combat Phase</h2>
+            </header>
+            <div class="combat-content">
+                <div id="combat-enemy-area">
+                    <span id="enemy-icon"></span>
+                    <span id="enemy-hp">HP: - / -</span>
+                    <span id="enemy-block">Block: 0</span>
+                </div>
+                
+                <div id="combat-player-area">
+                    <span id="player-hp">HP: - / -</span>
+                    <span id="player-block">Block: 0</span>
+                    <span id="player-energy">Energy: - / -</span>
+                </div>
+                
+                <div id="combat-deck-info">
+                    <span>Draw: <span id="draw-pile-count">0</span></span>
+                    <span>Discard: <span id="discard-pile-count">0</span></span>
+                </div>
+
+                <div id="combat-hand-area">
+                    <!-- Cards will be rendered here -->
+                </div>
+                
+                <button id="btn-execute-queue" class="btn">Execute Cards</button>
+            </div>
+        </section>
+        <!-- View 5: Campfire Phase -->
+        <section id="view-campfire" class="view hidden" aria-hidden="true">
+            <header class="ui-bar">
+                <h2>Campfire</h2>
+            </header>
+            <div class="campfire-content">
+                <p id="campfire-prompt" style="margin-bottom: 30px; font-size: 1.2rem; text-align: center;">You arrive at a peaceful campfire. What would you like to do?</p>
+                <div id="campfire-state-menu" class="campfire-options">
+                    <button id="btn-camp-heal" class="btn camp-btn">Rest (Heal 30%)</button>
+                    <button id="btn-camp-upgrade" class="btn camp-btn" style="background-color: #d97706;">Upgrade a Card</button>
+                    <button id="btn-leave-campfire" class="btn camp-btn" style="background-color: #4b5563;">Leave Campfire</button>
+                </div>
+                <div id="campfire-state-upgrade" class="hidden" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+                    <div id="campfire-card-grid" class="card-grid" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; max-width: 800px; margin-bottom: 20px;"></div>
+                    <button id="btn-cancel-upgrade" class="btn" style="background-color: #4b5563;">Back / Cancel</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Inventory Modal -->
+        <div id="inventory-modal" class="modal hidden" aria-hidden="true">
+            <div class="modal-content">
+                <header class="modal-header">
+                    <h2>Inventory & Deck</h2>
+                </header>
+                <div class="modal-body">
+                    <div class="inventory-section">
+                        <h3>Main Deck (<span id="deck-count">0</span>/15)</h3>
+                        <p class="help-text">Click a card to trash it (disabled during combat).</p>
+                        <div id="modal-deck-container" class="card-grid"></div>
+                    </div>
+                    <div class="inventory-section">
+                        <h3>Sideboard Cards (<span id="sideboard-count">0</span>/5)</h3>
+                        <div id="modal-sideboard-container" class="card-grid"></div>
+                    </div>
+                    <div class="inventory-section">
+                        <h3>Item Bag (<span id="item-count">0</span>/3)</h3>
+                        <div id="modal-items-container" class="item-grid"></div>
+                    </div>
+                    <button id="btn-exit-inventory" class="btn" style="width: 100%; margin-top: 20px; background-color: #4b5563;">Exit Inventory</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loot Modal -->
+        <div id="loot-modal" class="modal hidden" aria-hidden="true">
+            <div class="modal-content" style="max-width: 600px; text-align: center;">
+                <header class="modal-header">
+                    <h2>Combat Loot</h2>
+                </header>
+                <div class="modal-body">
+                    <p style="margin-bottom: 20px; font-size: 1.2rem;">Choose a card to add to your deck:</p>
+                    <div id="loot-cards-container" class="card-grid" style="justify-content: center; gap: 20px; margin-bottom: 30px;"></div>
+                    <div style="display: flex; gap: 10px; justify-content: center;">
+                        <button id="btn-loot-skip" class="btn" style="background-color: #4b5563;">Skip & Continue</button>
+                        <button id="btn-loot-reroll" class="btn" style="background-color: #d97706;">Reroll (20 Gold)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shop Modal -->
+        <div id="shop-modal" class="modal hidden" aria-hidden="true">
+            <div class="modal-content" style="max-width: 900px; transition: transform 0.3s ease, opacity 0.3s ease;">
+                <header class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <h2 style="margin: 0;">Shop</h2>
+                        <div id="shop-current-gold" style="color: #fbbf24; font-weight: bold; font-size: 1.2rem;">Gold: 0</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <button id="btn-peek-board" class="btn" style="background-color: #4b5563; padding: 5px 10px; font-size: 0.9rem;">👁️ View Board</button>
+                    </div>
+                </header>
+                <div class="modal-body" style="display: flex; gap: 20px;">
+                    <div style="flex: 2;">
+                        <h3 style="margin-bottom: 10px; border-bottom: 1px solid #374151; padding-bottom: 5px;">For Sale</h3>
+                        <div id="shop-stock-container" class="card-grid" style="gap: 15px; margin-bottom: 20px;"></div>
+                        <button id="btn-buy-confirm" class="btn hidden" style="background-color: #10b981; width: 100%; margin-bottom: 10px;">Buy</button>
+                        <button id="btn-shop-reroll" class="btn" style="background-color: #d97706; width: 100%;">Reroll Shop (10 Gold)</button>
+                    </div>
+                    <div style="flex: 1; border-left: 1px solid #374151; padding-left: 20px;">
+                        <h3 style="margin-bottom: 10px; border-bottom: 1px solid #374151; padding-bottom: 5px;">Sell from Sideboard</h3>
+                        <p class="help-text">Click to sell for 10G</p>
+                        <div id="shop-sell-container" class="card-grid" style="flex-direction: column;"></div>
+                    </div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <button id="btn-leave-shop" class="btn" style="width: 100%; background-color: #4b5563;">Leave Shop</button>
+                </div>
+            </div>
         </div>
     </main>
-    <script src="game.js"></script>
+    <!-- Custom Dialog Overlay -->
+    <div id="custom-dialog-overlay" class="hidden">
+        <div id="custom-dialog-box">
+            <h3 id="dialog-title">Title</h3>
+            <p id="dialog-message">Message</p>
+            <input type="number" id="dialog-input" class="hidden" min="1" max="6" style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 5px; background: #374151; color: #fff; border: 1px solid #4b5563;">
+            <div class="dialog-buttons">
+                <button id="btn-dialog-cancel" class="btn" style="background-color: #6b7280;">Cancel</button>
+                <button id="btn-dialog-confirm" class="btn" style="background-color: #3b82f6;">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./js/main.js"></script>
 </body>
 </html>

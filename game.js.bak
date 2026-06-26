@@ -1,0 +1,1338 @@
+/**
+ * Phase 1, 2 & 3: Core Architecture, Endless Board & Combat (QA Refactored)
+ */
+
+// 1. Initial State Definition
+const INITIAL_STATE = {
+    board: [],
+    lapCount: 0,
+    isRolling: false,
+    activeBoss: null,
+    player: {
+        class: null,
+        stats: {
+            hp: 0,
+            maxHp: 0,
+            gold: 0,
+            energy: 0,
+            maxEnergy: 3,
+            position: 0
+        },
+        inventory: {
+            cards: [],
+            items: ['Loaded Dice']
+        },
+        buffs: []
+    },
+    deck: {
+        drawPile: [],
+        hand: [],
+        discardPile: [],
+        exhaustPile: []
+    },
+    combat: {
+        enemy: { hp: 0, maxHp: 0, block: 0, type: '' },
+        playerBlock: 0,
+        turn: 'player'
+    },
+    meta: {
+        bossTokens: 0,
+        currentView: 'view-class-selection'
+    }
+};
+
+let gameState = null;
+
+const CLASS_CONFIGS = {
+    Warrior: { maxHp: 80, initialDeck: ["Strike", "Strike", "Defend", "Defend", "Bash"] },
+    Priest:  { maxHp: 60, initialDeck: ["Smite", "Smite", "Heal", "Defend", "Pray"] },
+    Archer:  { maxHp: 50, initialDeck: ["Shoot", "Shoot", "Dodge", "Dodge", "Focus"] },
+    Mage:    { maxHp: 40, initialDeck: ["Zap", "Zap", "Barrier", "Barrier", "Mana Crystal"] }
+};
+
+// Phase 4.1: Elemental System
+// Elemental Rules:
+// - Water (💧) beats Fire (🔥)
+// - Fire (🔥) beats Earth (🪨)
+// - Earth (🪨) beats Water (💧)
+// - Neutral (⚪) has no strengths or weaknesses.
+const ELEMENT_ICONS = ['🔥', '💧', '🪨'];
+
+const CARD_DB = {
+    "Strike": { cost: 1, type: 'attack', value: 6, element: '⚪' },
+    "Defend": { cost: 1, type: 'skill', value: 5, element: '⚪' },
+    "Bash": { cost: 2, type: 'attack', value: 10, element: '⚪' },
+    "Smite": { cost: 1, type: 'attack', value: 5, element: '⚪' },
+    "Heal": { cost: 1, type: 'heal', value: 6, element: '⚪' },
+    "Pray": { cost: 0, type: 'skill', value: 4, element: '⚪' },
+    "Shoot": { cost: 1, type: 'attack', value: 6, element: '⚪' },
+    "Dodge": { cost: 1, type: 'skill', value: 6, element: '⚪' },
+    "Focus": { cost: 0, type: 'skill', value: 3, element: '⚪' },
+    "Zap": { cost: 1, type: 'attack', value: 7, element: '⚪' },
+    "Barrier": { cost: 2, type: 'skill', value: 12, element: '⚪' },
+    "Mana Crystal": { cost: 0, type: 'skill', value: 3, element: '⚪' },
+    "Fireball": { cost: 2, type: 'attack', value: 8, element: '🔥' },
+    "Water Splash": { cost: 1, type: 'attack', value: 4, element: '💧' },
+    "Earth Spike": { cost: 2, type: 'attack', value: 7, element: '🪨' }
+};
+
+const BOSS_DB = {
+    "Ignis": { element: '🔥', mechanic: 'scorch' },
+    "Glacius": { element: '💧', mechanic: 'freeze' },
+    "Titanos": { element: '🪨', mechanic: 'mountain' },
+    "VoidWeaver": { element: '⚪', mechanic: 'corrupt' }
+};
+
+const CLASS_POOLS = {
+    "Warrior": ["Strike", "Defend", "Bash"],
+    "Priest": ["Smite", "Defend", "Heal", "Pray"],
+    "Archer": ["Shoot", "Defend", "Dodge", "Focus"],
+    "Mage": ["Zap", "Defend", "Barrier", "Mana Crystal", "Fireball", "Water Splash", "Earth Spike"]
+};
+
+// 3. DOM Elements Cache
+const DOM = {
+    views: document.querySelectorAll('.view'),
+    classCards: document.querySelectorAll('.class-card'),
+    ui: {
+        playerClass: document.getElementById('ui-class'),
+        hp: document.getElementById('ui-hp'),
+        gold: document.getElementById('ui-gold')
+    },
+    board: {
+        container: document.getElementById('board-container'),
+        statusLog: document.getElementById('status-log'),
+        rollBtn: document.getElementById('btn-roll-dice')
+    },
+    combat: {
+        enemyIcon: document.getElementById('enemy-icon'),
+        enemyHp: document.getElementById('enemy-hp'),
+        enemyBlock: document.getElementById('enemy-block'),
+        playerHp: document.getElementById('player-hp'),
+        playerBlock: document.getElementById('player-block'),
+        playerEnergy: document.getElementById('player-energy'),
+        handArea: document.getElementById('combat-hand-area'),
+        drawCount: document.getElementById('draw-pile-count'),
+        discardCount: document.getElementById('discard-pile-count'),
+        endTurnBtn: document.getElementById('btn-end-turn')
+    },
+    loot: {
+        wrapper: document.getElementById('loot-modal'),
+        container: document.getElementById('loot-cards-container'),
+        skipBtn: document.getElementById('btn-loot-skip'),
+        rerollBtn: document.getElementById('btn-loot-reroll')
+    },
+    shop: {
+        wrapper: document.getElementById('shop-modal'),
+        stockContainer: document.getElementById('shop-stock-container'),
+        sellContainer: document.getElementById('shop-sell-container'),
+        rerollBtn: document.getElementById('btn-shop-reroll'),
+        closeBtn: document.getElementById('btn-close-shop')
+    },
+    campfire: {
+        prompt: document.getElementById('campfire-prompt'),
+        optionsWrap: document.getElementById('campfire-options'),
+        upgradeWrap: document.getElementById('campfire-upgrade-container'),
+        deckGrid: document.getElementById('campfire-deck-grid'),
+        healBtn: document.getElementById('btn-camp-heal'),
+        upgradeBtn: document.getElementById('btn-camp-upgrade'),
+        cancelBtn: document.getElementById('btn-camp-cancel-upgrade')
+    },
+    modal: {
+        wrapper: document.getElementById('inventory-modal'),
+        openBtn: document.getElementById('btn-inventory'),
+        closeBtn: document.getElementById('btn-close-inventory'),
+        deckContainer: document.getElementById('modal-deck-container'),
+        sideboardContainer: document.getElementById('modal-sideboard-container'),
+        itemsContainer: document.getElementById('modal-items-container'),
+        deckCount: document.getElementById('deck-count'),
+        sideboardCount: document.getElementById('sideboard-count'),
+        itemCount: document.getElementById('item-count')
+    }
+};
+
+/**
+ * 4. State Management Actions
+ */
+
+const resetGameState = () => {
+    gameState = JSON.parse(JSON.stringify(INITIAL_STATE));
+    if (DOM.board.container) DOM.board.container.innerHTML = ''; 
+};
+
+const parseCard = (cardRef) => {
+    let baseRef = cardRef;
+    let plusCount = 0;
+    
+    while (baseRef.endsWith('+')) {
+        plusCount++;
+        baseRef = baseRef.slice(0, -1);
+    }
+    
+    let parsed;
+    if (!baseRef.includes(':')) {
+        parsed = { name: baseRef, ...CARD_DB[baseRef] };
+    } else {
+        const [name, element] = baseRef.split(':');
+        parsed = { name, ...CARD_DB[name], element };
+    }
+    
+    if (plusCount > 0) {
+        parsed.value += (plusCount * 3);
+        parsed.name += '+'.repeat(plusCount);
+    }
+    
+    return parsed;
+};
+
+// --- Game Logic ---
+const TILE_TYPES = ['⚔️', '❓', '💰', '🏕️'];
+
+const TILE_NAMES = {
+    '🏠': ["Town of Beginnings"],
+    '💰': ["Merchant's Cove", "Black Market", "Traveling Trader"],
+    '🏕️': ["Resting Bonfire", "Hero's Camp", "Peaceful Glade"],
+    '❓': ["Mystery Shrine", "Crossroads", "Forgotten Ruins"],
+    '⚔️': ["Goblin Path", "Bandit Ambush", "Dark Forest"],
+    '👹': ["Demon's Lair", "Boss Territory"]
+};
+
+// Generate fixed circular board
+const generateFixedBoard = () => {
+    gameState.board = [];
+    for (let i = 0; i < 20; i++) {
+        let icon;
+        let type;
+        if (i === 0) {
+            type = 'start';
+            icon = '🏠';
+        } else if (i % 10 === 0) {
+            type = 'boss';
+            icon = '👹';
+        } else {
+            type = 'normal';
+            icon = TILE_TYPES[Math.floor(Math.random() * TILE_TYPES.length)];
+        }
+        
+        const possibleNames = TILE_NAMES[icon] || ["Unknown"];
+        const name = possibleNames[Math.floor(Math.random() * possibleNames.length)];
+        gameState.board.push({ type, icon, name });
+    }
+};
+
+const rollDice = () => {
+    if (gameState.isRolling) return;
+    
+    gameState.isRolling = true;
+    if (DOM.board.rollBtn) DOM.board.rollBtn.disabled = true;
+    if (DOM.board.statusLog) DOM.board.statusLog.textContent = `Rolling... 🎲`;
+    
+    setTimeout(() => {
+        let diceRoll = Math.floor(Math.random() * 6) + 1;
+        if (gameState.meta.loadedDice) {
+            diceRoll = gameState.meta.loadedDice;
+            gameState.meta.loadedDice = null;
+        }
+        
+        let startPos = gameState.player.stats.position;
+        
+        // Step by step for mountain check
+        let finalPos = startPos;
+        for (let step = 1; step <= diceRoll; step++) {
+            let checkPos = (startPos + step) % gameState.board.length;
+            finalPos = startPos + step;
+            if (gameState.board[checkPos].icon === '⛰️') {
+                break;
+            }
+        }
+        
+        let passedGo = false;
+        const passGoLogic = () => {
+            gameState.lapCount++;
+            gameState.player.stats.gold += 50;
+            gameState.player.stats.hp = Math.min(gameState.player.stats.hp + 10, gameState.player.stats.maxHp);
+            passedGo = true;
+            
+            if (gameState.activeBoss) {
+                expandBossTerritory();
+            } else if (gameState.lapCount % 5 === 0 && gameState.lapCount > 0) {
+                spawnDynamicBoss();
+            }
+        };
+        
+        if (finalPos >= gameState.board.length) {
+            passGoLogic();
+        }
+        
+        gameState.player.stats.position = finalPos % gameState.board.length;
+        
+        let slideMsg = null;
+        if (gameState.board[gameState.player.stats.position].icon === '❄️') {
+            const slide = Math.floor(Math.random() * 3) + 1;
+            const oldPos = gameState.player.stats.position;
+            const newPos = oldPos + slide;
+            
+            if (newPos >= gameState.board.length) passGoLogic();
+            
+            gameState.player.stats.position = newPos % gameState.board.length;
+            slideMsg = `Slid ${slide} spaces on ice!`;
+        }
+        
+        renderBoard();
+        const triggersEvent = resolveEncounter(diceRoll, passedGo, slideMsg);
+        
+        // Unlock state and UI ONLY if we are staying on the board
+        if (!triggersEvent) {
+            gameState.isRolling = false;
+            if (DOM.board.rollBtn) DOM.board.rollBtn.disabled = false;
+        }
+        
+        syncUI();
+    }, 500);
+};
+
+const expandBossTerritory = () => {
+    if (!gameState.activeBoss) return;
+    
+    const { position, territory, mechanic } = gameState.activeBoss;
+    const len = gameState.board.length;
+    
+    const occupied = new Set([position, ...territory]);
+    let newTerritory = [];
+    
+    // Find neighbors of all occupied tiles that are not occupied
+    occupied.forEach(idx => {
+        const left = (idx - 1 + len) % len;
+        const right = (idx + 1) % len;
+        
+        if (!occupied.has(left) && left !== 0) newTerritory.push(left);
+        if (!occupied.has(right) && right !== 0) newTerritory.push(right);
+    });
+    
+    const uniqueNew = [...new Set(newTerritory)];
+    
+    uniqueNew.forEach(idx => {
+        territory.push(idx);
+        const tile = gameState.board[idx];
+        tile.type = 'territory';
+        
+        if (mechanic === 'scorch') tile.icon = '🔥';
+        else if (mechanic === 'freeze') tile.icon = '❄️';
+        else if (mechanic === 'mountain') tile.icon = '⛰️';
+        else if (mechanic === 'corrupt') tile.icon = '👁️';
+    });
+};
+
+const spawnDynamicBoss = () => {
+    const bossNames = Object.keys(BOSS_DB);
+    const randomBossName = bossNames[Math.floor(Math.random() * bossNames.length)];
+    const bossData = BOSS_DB[randomBossName];
+    
+    let randomIdx;
+    do {
+        randomIdx = Math.floor(Math.random() * (gameState.board.length - 1)) + 1;
+    } while (randomIdx === gameState.player.stats.position);
+    
+    gameState.board[randomIdx].type = 'boss';
+    gameState.board[randomIdx].icon = '👹';
+    
+    gameState.activeBoss = {
+        name: randomBossName,
+        element: bossData.element,
+        mechanic: bossData.mechanic,
+        position: randomIdx,
+        territory: []
+    };
+    
+    gameState.meta.pendingBossWarning = `WARNING: ${randomBossName} has appeared on the board!`;
+};
+
+const resolveEncounter = (rollResult, passedGo, slideMessage) => {
+    const tile = gameState.board[gameState.player.stats.position];
+    let triggersEvent = false;
+    
+    if (tile && DOM.board.statusLog) {
+        let message = `You rolled a ${rollResult}!`;
+        if (slideMessage) message += ` ${slideMessage}`;
+        
+        if (passedGo) {
+            message += ` Lap ${gameState.lapCount} Complete! +50 Gold, +10 HP!`;
+        }
+        
+        if (tile.name && tile.icon !== '✅') {
+            message += ` Arrived at [${tile.name}].`;
+        }
+        
+        if (gameState.meta.pendingBossWarning) {
+            message += ` ${gameState.meta.pendingBossWarning}`;
+            gameState.meta.pendingBossWarning = null;
+        }
+        
+        let encounterType = '';
+        
+        switch (tile.icon) {
+            case '⚔️': 
+                message += ` You encountered a Monster (Level ${gameState.lapCount})!`; 
+                triggersEvent = true;
+                encounterType = 'Monster';
+                break;
+            case '❓': message += " You found a mystery event!"; break;
+            case '💰': 
+                message += " You arrived at a Shop!"; 
+                openShopModal();
+                break;
+            case '🏕️': 
+                message += " You arrive at a Campfire."; 
+                campCancelUpgrade(); // reset campfire UI
+                triggersEvent = true;
+                encounterType = 'Campfire';
+                break;
+            case '👹': 
+                message += " You face a Boss!"; 
+                triggersEvent = true;
+                encounterType = 'Boss';
+                break;
+            case '🏠': message += " You landed on the Start space."; break;
+            
+            // Territories
+            case '🔥':
+                const scorchDmg = Math.floor(gameState.player.stats.maxHp * 0.1);
+                gameState.player.stats.hp -= scorchDmg;
+                message += ` Scorched! Lost ${scorchDmg} HP. You encounter a fiery Monster!`;
+                triggersEvent = true;
+                encounterType = 'Monster';
+                break;
+            case '❄️':
+                message += ` You landed on frozen ground! You encounter a frosted Monster!`;
+                triggersEvent = true;
+                encounterType = 'Monster';
+                break;
+            case '⛰️':
+                message += " The mountain path is blocked! You fight an Elite Monster!";
+                triggersEvent = true;
+                encounterType = 'Elite';
+                break;
+            case '👁️':
+                message += " You wander through corrupted territory... You encounter a void Monster!";
+                triggersEvent = true;
+                encounterType = 'Monster';
+                break;
+            case '✅':
+                message += " This area is clear.";
+                break;
+        }
+        DOM.board.statusLog.textContent = message;
+        
+        if (triggersEvent) {
+            setTimeout(() => {
+                if (encounterType === 'Campfire') {
+                    gameState.meta.currentView = 'view-campfire';
+                    syncUI();
+                } else {
+                    initCombat(encounterType);
+                }
+            }, 1500);
+        }
+    }
+    
+    return triggersEvent;
+};
+
+// Initialize Combat Phase
+const initCombat = (encounterType) => {
+    const isBoss = encounterType === 'Boss' || encounterType === '👹';
+    const isElite = encounterType === 'Elite';
+    
+    let baseHp = 20;
+    if (isBoss) baseHp = 50;
+    else if (isElite) baseHp = 35;
+    
+    gameState.combat.enemy.type = encounterType;
+    gameState.combat.enemy.maxHp = baseHp + (gameState.lapCount * 10);
+    gameState.combat.enemy.hp = gameState.combat.enemy.maxHp;
+    gameState.combat.enemy.block = 0;
+    
+    // Assign random element
+    gameState.combat.enemy.element = ELEMENT_ICONS[Math.floor(Math.random() * ELEMENT_ICONS.length)];
+    
+    gameState.combat.playerBlock = 0;
+    gameState.player.stats.energy = gameState.player.stats.maxEnergy;
+    gameState.combat.turn = 'player';
+    
+    gameState.meta.currentView = 'view-combat';
+    syncUI();
+    startPlayerTurn();
+};
+
+const shuffleArray = (array) => {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+};
+
+const drawCards = (amount) => {
+    for (let i = 0; i < amount; i++) {
+        if (gameState.deck.drawPile.length === 0) {
+            if (gameState.deck.discardPile.length === 0) break;
+            
+            gameState.deck.drawPile = [...gameState.deck.discardPile];
+            gameState.deck.discardPile = [];
+            shuffleArray(gameState.deck.drawPile);
+        }
+        gameState.deck.hand.push(gameState.deck.drawPile.pop());
+    }
+    renderCombatUI();
+};
+
+const startPlayerTurn = () => {
+    gameState.combat.turn = 'player';
+    gameState.player.stats.energy = gameState.player.stats.maxEnergy;
+    gameState.combat.playerBlock = 0; // Block must reset at the START of the player turn, not the end
+    gameState.combat.skillUsedThisTurn = false;
+    gameState.combat.enemyMarked = false;
+    drawCards(5);
+};
+
+const startEnemyTurn = () => {
+    // Simple Enemy AI
+    setTimeout(() => {
+        if (gameState.combat.enemy.hp <= 0) return; // Dead
+        
+        let dmg = 5 + gameState.lapCount;
+        
+        if (gameState.combat.playerBlock > 0) {
+            if (dmg >= gameState.combat.playerBlock) {
+                dmg -= gameState.combat.playerBlock;
+                gameState.combat.playerBlock = 0;
+            } else {
+                gameState.combat.playerBlock -= dmg;
+                dmg = 0;
+            }
+        }
+        
+        gameState.player.stats.hp -= dmg;
+        renderCombatUI();
+        
+        if (!checkCombatEnd()) {
+            startPlayerTurn();
+        }
+    }, 1000);
+};
+
+const checkCombatEnd = () => {
+    if (gameState.player.stats.hp <= 0) {
+        alert("Game Over! You have died.");
+        // Reset game to start
+        gameState.meta.currentView = 'view-class-selection';
+        syncUI();
+        return true;
+    }
+    
+    if (gameState.combat.enemy.hp <= 0) {
+        // Win Combat, Merge piles back into Master Deck safely
+        gameState.deck.drawPile.push(...gameState.deck.hand);
+        gameState.deck.drawPile.push(...gameState.deck.discardPile);
+        gameState.deck.hand = [];
+        gameState.deck.discardPile = [];
+        shuffleArray(gameState.deck.drawPile); 
+        
+        if (DOM.board.statusLog) DOM.board.statusLog.textContent = 'You defeated the enemy!';
+        
+        // Optionally clear the tile
+        const tile = gameState.board[gameState.player.stats.position];
+        tile.icon = '✅';
+        tile.type = 'cleared';
+        
+        gameState.meta.currentView = 'view-board';
+        syncUI();
+        renderBoard();
+        openLootModal();
+        return true;
+    }
+    
+    return false;
+};
+
+const calculateElementalDamage = (baseDamage, attackElement, defenseElement) => {
+    if (attackElement === '💧' && defenseElement === '🔥') return Math.floor(baseDamage * 1.5);
+    if (attackElement === '🔥' && defenseElement === '🪨') return Math.floor(baseDamage * 1.5);
+    if (attackElement === '🪨' && defenseElement === '💧') return Math.floor(baseDamage * 1.5);
+    
+    if (attackElement === '🔥' && defenseElement === '💧') return Math.floor(baseDamage * 0.5);
+    if (attackElement === '🪨' && defenseElement === '🔥') return Math.floor(baseDamage * 0.5);
+    if (attackElement === '💧' && defenseElement === '🪨') return Math.floor(baseDamage * 0.5);
+    
+    return baseDamage;
+};
+
+const playCard = (handIndex) => {
+    if (gameState.combat.turn !== 'player') return;
+    
+    const cardRef = gameState.deck.hand[handIndex];
+    const card = parseCard(cardRef);
+    if (!card) return;
+    
+    if (gameState.player.stats.energy < card.cost) {
+        alert("Not enough energy!");
+        return;
+    }
+    
+    // Deduct energy
+    gameState.player.stats.energy -= card.cost;
+    
+    // Apply effect
+    if (card.type === 'attack') {
+        let dmg = calculateElementalDamage(card.value, card.element, gameState.combat.enemy.element);
+        
+        if (gameState.combat.enemyMarked) {
+            dmg *= 2;
+            gameState.combat.enemyMarked = false; // consume mark
+        }
+        
+        // Visual feedback
+        const enemyArea = document.getElementById('combat-enemy-area');
+        if (enemyArea) {
+            const feedback = document.createElement('div');
+            feedback.style.position = 'absolute';
+            feedback.style.color = dmg > card.value ? '#10b981' : (dmg < card.value ? '#ef4444' : '#f8fafc');
+            feedback.style.fontWeight = 'bold';
+            feedback.style.fontSize = '1.2rem';
+            feedback.style.transform = 'translateY(-40px)';
+            feedback.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8)';
+            feedback.style.zIndex = '10';
+            
+            if (dmg > card.value) {
+                feedback.textContent = 'Super Effective! (' + dmg + ')';
+            } else if (dmg < card.value) {
+                feedback.textContent = 'Not Effective... (' + dmg + ')';
+            } else {
+                feedback.textContent = 'Hit (' + dmg + ')';
+            }
+            
+            // Ensure enemy area has relative positioning to anchor absolute text
+            enemyArea.style.position = 'relative';
+            enemyArea.appendChild(feedback);
+            setTimeout(() => {
+                if (feedback.parentNode) feedback.remove();
+            }, 1000);
+        }
+
+        if (gameState.combat.enemy.block > 0) {
+            if (dmg >= gameState.combat.enemy.block) {
+                dmg -= gameState.combat.enemy.block;
+                gameState.combat.enemy.block = 0;
+            } else {
+                gameState.combat.enemy.block -= dmg;
+                dmg = 0;
+            }
+        }
+        gameState.combat.enemy.hp -= dmg;
+    } else if (card.type === 'skill') {
+        gameState.combat.playerBlock += card.value;
+    } else if (card.type === 'heal') {
+        gameState.player.stats.hp = Math.min(gameState.player.stats.hp + card.value, gameState.player.stats.maxHp);
+    }
+    
+    // Discard card
+    gameState.deck.hand.splice(handIndex, 1);
+    gameState.deck.discardPile.push(cardName);
+    
+    renderCombatUI();
+    checkCombatEnd();
+};
+
+const useHeroSkill = () => {
+    if (gameState.combat.turn !== 'player') return;
+    if (gameState.combat.skillUsedThisTurn) return;
+    
+    const playerClass = gameState.player.class;
+    
+    // Check costs
+    if (playerClass === 'Warrior' && gameState.player.stats.energy < 2) { alert("Not enough energy!"); return; }
+    if (playerClass === 'Mage' && gameState.player.stats.hp <= 3) { alert("Not enough HP!"); return; }
+    if (playerClass === 'Archer' && gameState.player.stats.energy < 1) { alert("Not enough energy!"); return; }
+    if (playerClass === 'Priest' && gameState.player.stats.energy < 2) { alert("Not enough energy!"); return; }
+    
+    // Apply costs
+    if (playerClass === 'Warrior') gameState.player.stats.energy -= 2;
+    if (playerClass === 'Mage') gameState.player.stats.hp -= 3;
+    if (playerClass === 'Archer') gameState.player.stats.energy -= 1;
+    if (playerClass === 'Priest') gameState.player.stats.energy -= 2;
+    
+    // Mark as used
+    gameState.combat.skillUsedThisTurn = true;
+    
+    // Apply effect
+    if (playerClass === 'Warrior') {
+        let dmg = gameState.combat.playerBlock;
+        if (gameState.combat.enemy.block > 0) {
+            if (dmg >= gameState.combat.enemy.block) {
+                dmg -= gameState.combat.enemy.block;
+                gameState.combat.enemy.block = 0;
+            } else {
+                gameState.combat.enemy.block -= dmg;
+                dmg = 0;
+            }
+        }
+        gameState.combat.enemy.hp -= dmg;
+        
+        // Visual feedback
+        const enemyArea = document.getElementById('combat-enemy-area');
+        if (enemyArea) {
+            const feedback = document.createElement('div');
+            feedback.style.position = 'absolute';
+            feedback.style.color = '#f59e0b';
+            feedback.style.fontWeight = 'bold';
+            feedback.style.fontSize = '1.2rem';
+            feedback.style.transform = 'translateY(-40px)';
+            feedback.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8)';
+            feedback.style.zIndex = '10';
+            feedback.textContent = `Shield Bash! (${dmg})`;
+            enemyArea.style.position = 'relative';
+            enemyArea.appendChild(feedback);
+            setTimeout(() => { if (feedback.parentNode) feedback.remove(); }, 1000);
+        }
+    } else if (playerClass === 'Mage') {
+        gameState.player.stats.energy += 2;
+        drawCards(2); 
+    } else if (playerClass === 'Archer') {
+        gameState.combat.enemyMarked = true;
+    } else if (playerClass === 'Priest') {
+        gameState.player.stats.hp = Math.min(gameState.player.stats.hp + 5, gameState.player.stats.maxHp);
+    }
+    
+    renderCombatUI();
+    checkCombatEnd();
+};
+
+const openLootModal = () => {
+    gameState.meta.lootRerolled = false;
+    if (DOM.loot.rerollBtn) DOM.loot.rerollBtn.disabled = false;
+    generateLootCards();
+    DOM.loot.wrapper.classList.remove('hidden');
+    DOM.loot.wrapper.setAttribute('aria-hidden', 'false');
+};
+
+const closeLootModal = () => {
+    DOM.loot.wrapper.classList.add('hidden');
+    DOM.loot.wrapper.setAttribute('aria-hidden', 'true');
+    gameState.isRolling = false;
+    if (DOM.board.rollBtn) DOM.board.rollBtn.disabled = false;
+};
+
+const generateLootCards = () => {
+    const { container } = DOM.loot;
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const playerClass = gameState.player.class;
+    const classCards = CLASS_POOLS[playerClass] || Object.keys(CARD_DB);
+    const otherCards = Object.keys(CARD_DB).filter(c => !classCards.includes(c));
+    const allCards = Object.keys(CARD_DB);
+    
+    const elements = ['⚪', '🔥', '💧', '🪨'];
+    
+    const options = [];
+    for (let i = 0; i < 3; i++) {
+        const isClassCard = Math.random() < 0.90;
+        let pool = isClassCard && classCards.length > 0 ? classCards : otherCards;
+        if (pool.length === 0) pool = allCards;
+        
+        const randomCardName = pool[Math.floor(Math.random() * pool.length)];
+        const randomElement = elements[Math.floor(Math.random() * elements.length)];
+        options.push(`${randomCardName}:${randomElement}`);
+    }
+    
+    options.forEach(cardRef => {
+        const card = parseCard(cardRef);
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'combat-card';
+        
+        let desc = '';
+        if (card.type === 'attack') desc = `Deal ${card.value} DMG`;
+        else if (card.type === 'skill') desc = `Gain ${card.value} Block`;
+        else if (card.type === 'heal') desc = `Heal ${card.value} HP`;
+        
+        cardDiv.innerHTML = `<strong>${card.name}</strong><span>Cost: ${card.cost} EN</span><small>${desc}</small><div style="margin-top:5px; font-size:1.2rem;">${card.element}</div>`;
+        
+        cardDiv.addEventListener('click', () => {
+            selectLootCard(cardRef);
+        });
+        
+        container.appendChild(cardDiv);
+    });
+};
+
+const selectLootCard = (cardRef) => {
+    if (cardRef) {
+        const parsed = parseCard(cardRef);
+        const deckSize = gameState.deck.drawPile.length + gameState.deck.hand.length + gameState.deck.discardPile.length;
+        if (deckSize >= 15) {
+            if (gameState.player.inventory.cards.length < 5) {
+                if (confirm("Main deck full. Send to Sideboard?")) {
+                    gameState.player.inventory.cards.push(cardRef);
+                    if (DOM.board.statusLog) DOM.board.statusLog.textContent += ` Added ${parsed.name} to sideboard!`;
+                    closeLootModal();
+                }
+            } else {
+                alert("Inventory Full! You must discard something first.");
+            }
+        } else {
+            gameState.deck.drawPile.push(cardRef);
+            if (DOM.board.statusLog) DOM.board.statusLog.textContent += ` Added ${parsed.name} to deck!`;
+            closeLootModal();
+        }
+    } else {
+        if (DOM.board.statusLog) DOM.board.statusLog.textContent += ` Skipped loot.`;
+        closeLootModal();
+    }
+};
+
+const rerollLoot = () => {
+    if (gameState.meta.lootRerolled) return;
+    if (gameState.player.stats.gold < 20) {
+        alert("Not enough gold to reroll!");
+        return;
+    }
+    
+    gameState.player.stats.gold -= 20;
+    gameState.meta.lootRerolled = true;
+    if (DOM.loot.rerollBtn) DOM.loot.rerollBtn.disabled = true;
+    
+    syncUI();
+    generateLootCards();
+};
+
+const campHeal = () => {
+    const healAmount = Math.floor(gameState.player.stats.maxHp * 0.3);
+    gameState.player.stats.hp = Math.min(gameState.player.stats.hp + healAmount, gameState.player.stats.maxHp);
+    
+    if (DOM.board.statusLog) {
+        DOM.board.statusLog.textContent = `Rested at campfire. Healed ${healAmount} HP!`;
+    }
+    
+    const tile = gameState.board[gameState.player.stats.position];
+    tile.icon = '✅';
+    tile.type = 'cleared';
+    
+    gameState.isRolling = false;
+    if (DOM.board.rollBtn) DOM.board.rollBtn.disabled = false;
+    
+    gameState.meta.currentView = 'view-board';
+    syncUI();
+    renderBoard();
+};
+
+const campOpenUpgrade = () => {
+    DOM.campfire.prompt.textContent = "Select a card to upgrade:";
+    DOM.campfire.optionsWrap.classList.add('hidden');
+    DOM.campfire.upgradeWrap.classList.remove('hidden');
+    
+    const { deckGrid } = DOM.campfire;
+    deckGrid.innerHTML = '';
+    
+    const allDeckCards = [...gameState.deck.drawPile, ...gameState.deck.hand, ...gameState.deck.discardPile];
+    
+    allDeckCards.forEach(cardRef => {
+        const card = parseCard(cardRef);
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'combat-card';
+        
+        let desc = '';
+        if (card.type === 'attack') desc = `Deal ${card.value} DMG`;
+        else if (card.type === 'skill') desc = `Gain ${card.value} Block`;
+        else if (card.type === 'heal') desc = `Heal ${card.value} HP`;
+        
+        cardDiv.innerHTML = `<strong>${card.name}</strong><span>Cost: ${card.cost} EN</span><small>${desc}</small><div style="margin-top:5px; font-size:1.2rem;">${card.element}</div>`;
+        
+        cardDiv.addEventListener('click', () => {
+            if (confirm(`Upgrade ${card.name}?`)) {
+                campUpgradeCard(cardRef);
+            }
+        });
+        deckGrid.appendChild(cardDiv);
+    });
+};
+
+const campCancelUpgrade = () => {
+    if (DOM.campfire.prompt) DOM.campfire.prompt.textContent = "You arrive at a peaceful campfire. What would you like to do?";
+    if (DOM.campfire.optionsWrap) DOM.campfire.optionsWrap.classList.remove('hidden');
+    if (DOM.campfire.upgradeWrap) DOM.campfire.upgradeWrap.classList.add('hidden');
+};
+
+const campUpgradeCard = (oldCardRef) => {
+    const newCardRef = oldCardRef + '+';
+    
+    const piles = ['drawPile', 'discardPile', 'hand'];
+    for (let pile of piles) {
+        const idx = gameState.deck[pile].indexOf(oldCardRef);
+        if (idx !== -1) {
+            gameState.deck[pile][idx] = newCardRef;
+            break;
+        }
+    }
+    
+    if (DOM.board.statusLog) {
+        DOM.board.statusLog.textContent = `Upgraded to ${parseCard(newCardRef).name}!`;
+    }
+    
+    const tile = gameState.board[gameState.player.stats.position];
+    tile.icon = '✅';
+    tile.type = 'cleared';
+    
+    gameState.isRolling = false;
+    if (DOM.board.rollBtn) DOM.board.rollBtn.disabled = false;
+    
+    gameState.meta.currentView = 'view-board';
+    syncUI();
+    renderBoard();
+};
+
+// SHOP LOGIC
+const openShopModal = () => {
+    gameState.meta.shopRerolled = false;
+    if (DOM.shop.rerollBtn) DOM.shop.rerollBtn.disabled = false;
+    generateShopStock();
+    if (DOM.shop.wrapper) {
+        DOM.shop.wrapper.classList.remove('hidden');
+        DOM.shop.wrapper.setAttribute('aria-hidden', 'false');
+    }
+};
+
+const closeShopModal = () => {
+    if (DOM.shop.wrapper) {
+        DOM.shop.wrapper.classList.add('hidden');
+        DOM.shop.wrapper.setAttribute('aria-hidden', 'true');
+    }
+    gameState.isRolling = false;
+    if (DOM.board.rollBtn) DOM.board.rollBtn.disabled = false;
+    syncUI();
+};
+
+const generateShopStock = () => {
+    const { stockContainer, sellContainer } = DOM.shop;
+    if (!stockContainer) return;
+    
+    stockContainer.innerHTML = '';
+    
+    const allCards = Object.keys(CARD_DB);
+    const elements = ['⚪', '🔥', '💧', '🪨'];
+    
+    for (let i = 0; i < 3; i++) {
+        const randomCardName = allCards[Math.floor(Math.random() * allCards.length)];
+        const randomElement = elements[Math.floor(Math.random() * elements.length)];
+        const cardRef = `${randomCardName}:${randomElement}`;
+        const card = parseCard(cardRef);
+        
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'combat-card';
+        let desc = '';
+        if (card.type === 'attack') desc = `Deal ${card.value} DMG`;
+        else if (card.type === 'skill') desc = `Gain ${card.value} Block`;
+        else if (card.type === 'heal') desc = `Heal ${card.value} HP`;
+        
+        cardDiv.innerHTML = `<strong>${card.name}</strong><span>Cost: ${card.cost} EN</span><small>${desc}</small><div style="margin-top:5px; font-size:1.2rem;">${card.element}</div><button style="margin-top:10px; padding:5px; width:100%;" class="btn">Buy 30G</button>`;
+        
+        cardDiv.querySelector('button').addEventListener('click', () => {
+            buyShopItem('card', cardRef, 30, cardDiv);
+        });
+        
+        stockContainer.appendChild(cardDiv);
+    }
+    
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'modal-item';
+    itemDiv.style.textAlign = 'center';
+    itemDiv.innerHTML = `<strong>Loaded Dice</strong><br/><small>Force next roll</small><br/><button style="margin-top:10px; padding:5px; width:100%;" class="btn">Buy 20G</button>`;
+    itemDiv.querySelector('button').addEventListener('click', () => {
+        buyShopItem('item', 'Loaded Dice', 20, itemDiv);
+    });
+    stockContainer.appendChild(itemDiv);
+    
+    renderShopSellSideboard();
+};
+
+const renderShopSellSideboard = () => {
+    const { sellContainer } = DOM.shop;
+    if (!sellContainer) return;
+    sellContainer.innerHTML = '';
+    
+    gameState.player.inventory.cards.forEach((cardRef, idx) => {
+        const parsed = parseCard(cardRef);
+        const displayStr = cardRef.includes(':') ? `${parsed.name} (${parsed.element})` : parsed.name;
+        
+        const el = document.createElement('div');
+        el.className = 'modal-card';
+        el.innerHTML = `${displayStr} <button style="margin-top:5px; padding:5px; width:100%;" class="btn">Sell 10G</button>`;
+        
+        el.querySelector('button').addEventListener('click', () => {
+            gameState.player.stats.gold += 10;
+            trashCard(cardRef, 'sideboard', idx);
+            renderShopSellSideboard(); 
+            syncUI(); 
+        });
+        sellContainer.appendChild(el);
+    });
+};
+
+const buyShopItem = (type, ref, cost, elToRemove) => {
+    if (gameState.player.stats.gold < cost) {
+        alert("Not enough gold!");
+        return;
+    }
+    
+    if (type === 'card') {
+        const deckSize = gameState.deck.drawPile.length + gameState.deck.hand.length + gameState.deck.discardPile.length;
+        if (deckSize >= 15) {
+            if (gameState.player.inventory.cards.length >= 5) {
+                alert("Deck and Sideboard are full!");
+                return;
+            }
+            gameState.player.inventory.cards.push(ref);
+        } else {
+            gameState.deck.drawPile.push(ref);
+        }
+    } else if (type === 'item') {
+        if (gameState.player.inventory.items.length >= 3) {
+            alert("Item Bag is full!");
+            return;
+        }
+        gameState.player.inventory.items.push(ref);
+    }
+    
+    gameState.player.stats.gold -= cost;
+    elToRemove.remove();
+    syncUI();
+    renderInventoryModal();
+};
+
+const rerollShop = () => {
+    if (gameState.meta.shopRerolled) return;
+    if (gameState.player.stats.gold < 10) {
+        alert("Not enough gold to reroll!");
+        return;
+    }
+    gameState.player.stats.gold -= 10;
+    gameState.meta.shopRerolled = true;
+    if (DOM.shop.rerollBtn) DOM.shop.rerollBtn.disabled = true;
+    syncUI();
+    generateShopStock();
+};
+
+const endPlayerTurn = () => {
+    if (gameState.combat.turn !== 'player') return;
+    
+    gameState.deck.discardPile.push(...gameState.deck.hand);
+    gameState.deck.hand = [];
+    
+    gameState.combat.turn = 'enemy';
+    renderCombatUI();
+    
+    setTimeout(() => {
+        startEnemyTurn();
+    }, 1000);
+};
+
+const openInventoryModal = () => {
+    renderInventoryModal();
+    if (DOM.modal.wrapper) {
+        DOM.modal.wrapper.classList.remove('hidden');
+        DOM.modal.wrapper.setAttribute('aria-hidden', 'false');
+    }
+};
+
+const closeInventoryModal = () => {
+    if (DOM.modal.wrapper) {
+        DOM.modal.wrapper.classList.add('hidden');
+        DOM.modal.wrapper.setAttribute('aria-hidden', 'true');
+    }
+};
+
+const renderInventoryModal = () => {
+    const { deckContainer, sideboardContainer, itemsContainer, deckCount, sideboardCount, itemCount } = DOM.modal;
+    if (!deckContainer) return;
+    
+    // Total Deck
+    const allDeckCards = [...gameState.deck.drawPile, ...gameState.deck.hand, ...gameState.deck.discardPile];
+    deckCount.textContent = allDeckCards.length;
+    deckContainer.innerHTML = '';
+    
+    const isCombat = gameState.meta.currentView === 'view-combat';
+    
+    allDeckCards.forEach((cardRef) => {
+        const parsed = parseCard(cardRef);
+        const displayStr = cardRef.includes(':') ? `${parsed.name} (${parsed.element})` : parsed.name;
+        
+        const el = document.createElement('div');
+        el.className = 'modal-card';
+        el.textContent = displayStr;
+        el.addEventListener('click', () => {
+            if (isCombat) {
+                alert("Cannot trash cards during combat!");
+                return;
+            }
+            if (confirm(`Trash ${displayStr} from your main deck?`)) {
+                trashCard(cardRef, 'deck');
+            }
+        });
+        deckContainer.appendChild(el);
+    });
+    
+    // Sideboard
+    sideboardCount.textContent = gameState.player.inventory.cards.length;
+    sideboardContainer.innerHTML = '';
+    gameState.player.inventory.cards.forEach((cardRef, idx) => {
+        const parsed = parseCard(cardRef);
+        const displayStr = cardRef.includes(':') ? `${parsed.name} (${parsed.element})` : parsed.name;
+        
+        const el = document.createElement('div');
+        el.className = 'modal-card';
+        el.textContent = displayStr;
+        el.addEventListener('click', () => {
+            if (confirm(`Trash ${displayStr} from your sideboard?`)) {
+                trashCard(cardRef, 'sideboard', idx);
+            }
+        });
+        sideboardContainer.appendChild(el);
+    });
+    
+    // Items
+    itemCount.textContent = gameState.player.inventory.items.length;
+    itemsContainer.innerHTML = '';
+    gameState.player.inventory.items.forEach((itemName, idx) => {
+        const el = document.createElement('div');
+        el.className = 'modal-item';
+        el.textContent = itemName;
+        el.addEventListener('click', () => {
+            useItem(itemName, idx);
+        });
+        itemsContainer.appendChild(el);
+    });
+};
+
+const trashCard = (cardName, source, exactIdx) => {
+    if (source === 'deck') {
+        const piles = ['drawPile', 'discardPile', 'hand'];
+        for (let pile of piles) {
+            const i = gameState.deck[pile].indexOf(cardName);
+            if (i !== -1) {
+                gameState.deck[pile].splice(i, 1);
+                break;
+            }
+        }
+    } else if (source === 'sideboard') {
+        if (exactIdx !== undefined) {
+            gameState.player.inventory.cards.splice(exactIdx, 1);
+        } else {
+            const i = gameState.player.inventory.cards.indexOf(cardName);
+            if (i !== -1) gameState.player.inventory.cards.splice(i, 1);
+        }
+    }
+    renderInventoryModal();
+};
+
+const useItem = (itemName, idx) => {
+    if (itemName === 'Loaded Dice') {
+        let val = parseInt(prompt("Choose a number from 1 to 6 for your next roll:"));
+        if (!isNaN(val) && val >= 1 && val <= 6) {
+            gameState.meta.loadedDice = val;
+            gameState.player.inventory.items.splice(idx, 1);
+            alert(`Loaded Dice used! Next roll will be ${val}.`);
+            renderInventoryModal();
+        } else {
+            alert("Invalid number. Item not used.");
+        }
+    }
+};
+
+// Initialize game with a selected class
+const initializeGame = (className) => {
+    const config = CLASS_CONFIGS[className];
+    if (!config) return;
+
+    resetGameState();
+
+    gameState.player.class = className;
+    gameState.player.stats.maxHp = config.maxHp;
+    gameState.player.stats.hp = config.maxHp;
+    
+    // Init Deck and explicitly shuffle
+    gameState.deck.drawPile = [...config.initialDeck];
+    shuffleArray(gameState.deck.drawPile);
+    
+    gameState.meta.currentView = 'view-board';
+
+    generateFixedBoard();
+    syncUI();
+    
+    if (DOM.board.statusLog) DOM.board.statusLog.textContent = 'Ready to roll!';
+    if (DOM.board.rollBtn) DOM.board.rollBtn.disabled = false;
+    
+    renderBoard(); // Initial render
+};
+
+/**
+ * 5. UI / Rendering Logic (Separation of Concerns)
+ */
+
+const syncUI = () => {
+    // Show active view
+    DOM.views.forEach(view => {
+        if (view.id === gameState.meta.currentView) {
+            view.classList.remove('hidden');
+            view.setAttribute('aria-hidden', 'false');
+        } else {
+            view.classList.add('hidden');
+            view.setAttribute('aria-hidden', 'true');
+        }
+    });
+
+    // Update Top Bar
+    if (DOM.ui.classInfo) DOM.ui.classInfo.textContent = gameState.player.class || '-';
+    if (DOM.ui.hpInfo) DOM.ui.hpInfo.textContent = `${gameState.player.stats.hp} / ${gameState.player.stats.maxHp}`;
+    if (DOM.ui.goldInfo) DOM.ui.goldInfo.textContent = gameState.player.stats.gold;
+};
+
+// Renders the board tiles efficiently without wiping the DOM
+const renderBoard = () => {
+    const { container } = DOM.board;
+    if (!container) return;
+    
+    if (container.children.length < gameState.board.length) {
+        for (let i = container.children.length; i < gameState.board.length; i++) {
+            const tile = gameState.board[i];
+            const tileDiv = document.createElement('div');
+            tileDiv.className = 'tile';
+            tileDiv.id = `tile-${i}`;
+            tileDiv.textContent = tile.icon;
+            container.appendChild(tileDiv);
+        }
+    }
+    
+    for (let i = 0; i < gameState.board.length; i++) {
+        const tileDiv = container.children[i];
+        if (i === gameState.player.stats.position) {
+            tileDiv.classList.add('player-here');
+            tileDiv.textContent = '🚶‍♂️';
+        } else {
+            tileDiv.classList.remove('player-here');
+            tileDiv.textContent = gameState.board[i].icon;
+        }
+    }
+};
+
+const renderCombatUI = () => {
+    if (!DOM.combat.enemyHp) return;
+    
+    const { combat, player } = gameState;
+    
+    const enemyIcon = combat.enemy.type === 'Boss' ? '👹' : '⚔️';
+    DOM.combat.enemyIcon.textContent = `${enemyIcon} ${combat.enemy.element || '⚪'}`;
+    DOM.combat.enemyHp.textContent = `HP: ${combat.enemy.hp} / ${combat.enemy.maxHp}`;
+    DOM.combat.enemyBlock.textContent = `Block: ${combat.enemy.block}`;
+    
+    DOM.combat.playerHp.textContent = `HP: ${player.stats.hp} / ${player.stats.maxHp}`;
+    DOM.combat.playerBlock.textContent = `Block: ${combat.playerBlock}`;
+    DOM.combat.playerEnergy.textContent = `Energy: ${player.stats.energy} / ${player.stats.maxEnergy}`;
+    
+    // Hero Skill Button Rendering
+    const playerArea = document.getElementById('combat-player-area');
+    if (playerArea) {
+        let skillBtn = document.getElementById('btn-hero-skill');
+        if (!skillBtn) {
+            skillBtn = document.createElement('button');
+            skillBtn.id = 'btn-hero-skill';
+            skillBtn.className = 'btn';
+            skillBtn.style.marginLeft = '20px';
+            skillBtn.addEventListener('click', useHeroSkill);
+            playerArea.appendChild(skillBtn);
+        }
+        
+        if (player.class === 'Warrior') {
+            skillBtn.textContent = 'Shield Bash (2 EN)';
+            skillBtn.title = 'Deals damage equal to current Block.';
+        } else if (player.class === 'Mage') {
+            skillBtn.textContent = 'Mana Surge (3 HP)';
+            skillBtn.title = 'Draw 2 cards, Gain 2 Energy. Costs 3 HP.';
+        } else if (player.class === 'Archer') {
+            skillBtn.textContent = 'Mark Target (1 EN)';
+            skillBtn.title = 'Next attack deals double damage.';
+        } else if (player.class === 'Priest') {
+            skillBtn.textContent = 'Divine Heal (2 EN)';
+            skillBtn.title = 'Restore 5 HP.';
+        }
+        
+        skillBtn.disabled = combat.skillUsedThisTurn || combat.turn !== 'player';
+    }
+    
+    DOM.combat.drawCount.textContent = gameState.deck.drawPile.length;
+    DOM.combat.discardCount.textContent = gameState.deck.discardPile.length;
+    
+    // Render hand
+    DOM.combat.handArea.innerHTML = '';
+    const { deck } = gameState;
+    
+    deck.hand.forEach((cardRef, index) => {
+        const card = parseCard(cardRef);
+        const cardDiv = document.createElement('div');
+        cardDiv.className = 'combat-card';
+        
+        let desc = '';
+        if (card.type === 'attack') desc = `Deal ${card.value} DMG`;
+        else if (card.type === 'skill') desc = `Gain ${card.value} Block`;
+        else if (card.type === 'heal') desc = `Heal ${card.value} HP`;
+        
+        cardDiv.innerHTML = `<strong>${card.name}</strong><span>Cost: ${card.cost} EN</span><small>${desc}</small><div style="margin-top:5px; font-size:1.2rem;">${card.element}</div>`;
+        
+        cardDiv.addEventListener('click', () => {
+            playCard(index);
+        });
+        
+        DOM.combat.handArea.appendChild(cardDiv);
+    });
+};
+
+/**
+ * 6. Event Listeners Setup
+ */
+const bindEvents = () => {
+    DOM.classCards.forEach(card => {
+        card.addEventListener('click', (e) => {
+            const button = e.target.closest('.class-card');
+            if (button && button.dataset.class) {
+                initializeGame(button.dataset.class);
+            }
+        });
+    });
+
+    if (DOM.board.rollBtn) {
+        DOM.board.rollBtn.addEventListener('click', rollDice);
+    }
+
+    if (DOM.combat.endTurnBtn) {
+        DOM.combat.endTurnBtn.addEventListener('click', endPlayerTurn);
+    }
+    
+    if (DOM.loot.skipBtn) DOM.loot.skipBtn.addEventListener('click', () => selectLootCard(null));
+    if (DOM.loot.rerollBtn) DOM.loot.rerollBtn.addEventListener('click', rerollLoot);
+    
+    if (DOM.shop.closeBtn) DOM.shop.closeBtn.addEventListener('click', closeShopModal);
+    if (DOM.shop.rerollBtn) DOM.shop.rerollBtn.addEventListener('click', rerollShop);
+    
+    if (DOM.campfire.healBtn) DOM.campfire.healBtn.addEventListener('click', campHeal);
+    if (DOM.campfire.upgradeBtn) DOM.campfire.upgradeBtn.addEventListener('click', campOpenUpgrade);
+    if (DOM.campfire.cancelBtn) DOM.campfire.cancelBtn.addEventListener('click', campCancelUpgrade);
+    
+    if (DOM.modal.openBtn) DOM.modal.openBtn.addEventListener('click', openInventoryModal);
+    if (DOM.modal.closeBtn) DOM.modal.closeBtn.addEventListener('click', closeInventoryModal);
+};
+
+/**
+ * 7. Initialization
+ */
+const bootGame = () => {
+    bindEvents();
+};
+
+document.addEventListener('DOMContentLoaded', bootGame);
